@@ -3,8 +3,6 @@ import pg8000
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, \
     QMessageBox, QTabWidget, QTableWidget, QTableWidgetItem
 
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QTabWidget, QTableWidget, QDialog
-
 def connect_db():
     try:
         conn = pg8000.connect(
@@ -53,9 +51,9 @@ def load_categories():
     conn = connect_db()
     if conn:
         try:
-            cur = conn.cursor()
-            cur.execute("SELECT id, name FROM categories")
-            categories = cur.fetchall()
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM get_all_categories()")
+            categories = cursor.fetchall()
             display_categories(categories)
         except Exception as e:
             QMessageBox.critical(None, "Ошибка", f"Не удалось загрузить категории: {e}")
@@ -96,36 +94,6 @@ def clear_category_form():
     entry_category_name.clear()
 
 
-def edit_category():
-    row = table_categories.currentRow()
-    if row == -1:
-        QMessageBox.warning(None, "Ошибка", "Пожалуйста, выберите категорию для редактирования.")
-        return
-    category_id = table_categories.item(row, 0).text()
-    category_name = table_categories.item(row, 1).text()
-    entry_category_name.setText(category_name)
-    def save_edits():
-        new_category_name = entry_category_name.text()
-
-        if not new_category_name:
-            QMessageBox.warning(None, "Ошибка", "Пожалуйста, заполните название категории.")
-            return
-        conn = connect_db()
-        if conn:
-            try:
-                cur = conn.cursor()
-                cur.execute("UPDATE categories SET name=%s WHERE id=%s", (new_category_name, category_id))
-                conn.commit()
-                QMessageBox.information(None, "Успех", "Категория успешно обновлена!")
-                load_categories()
-            except Exception as e:
-                QMessageBox.critical(None, "Ошибка", f"Не удалось обновить категорию: {e}")
-            finally:
-                conn.close()
-
-    button_save_edits = QPushButton("Сохранить изменения")
-    button_save_edits.clicked.connect(save_edits)
-    add_category_layout.addWidget(button_save_edits)
 
 
 def delete_category():
@@ -184,30 +152,15 @@ def add_book():
             conn.close()
 
 
-# def load_books():
-#     conn = connect_db()
-#     if conn:
-#         try:
-#             cur = conn.cursor()
-#             # Вызов функции для получения данных
-#             cur.execute("SELECT * FROM load_books()")
-#             books = cur.fetchall()  # Получаем все записи из результата
-#
-#             # Обработка данных и вывод
-#             display_books(books)  # Вызов функции для отображения книг
-#
-#         except Exception as e:
-#             QMessageBox.critical(None, "Ошибка", f"Не удалось загрузить книги: {e}")
-#         finally:
-#             conn.close()
+
 
 def load_books():
     conn = connect_db()
     if conn:
         try:
-            cur = conn.cursor()
-            cur.execute("SELECT id, title, author, year, category_id FROM books")
-            books = cur.fetchall()
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM get_all_books()")
+            books = cursor.fetchall()
             display_books(books)
         except Exception as e:
             QMessageBox.critical(None, "Ошибка", f"Не удалось загрузить книги: {e}")
@@ -251,18 +204,21 @@ def delete_database(dbname):
             finally:
                 conn.close()
 
-def clear_table(table_name):
+def clear_table():
     conn = connect_db()
     if conn:
         try:
             with conn.cursor() as cursor:
-                cursor.execute("CALL clear_table(%s::text)", (table_name,))
+                # Вызов процедуры для удаления таблицы books
+                cursor.execute("CALL delete_books_table();")
                 conn.commit()
-                QMessageBox.information(None, "Очистка", f"Таблица {table_name} успешно очищена!")
+                QMessageBox.information(None, "Удаление", 'Таблица "books" успешно удалена!')
         except Exception as e:
-            QMessageBox.critical(None, "Ошибка очистки таблицы", f"Не удалось очистить таблицу '{table_name}': {e}")
+            QMessageBox.critical(None, "Ошибка удаления таблицы", f"Не удалось удалить таблицу 'books': {e}")
         finally:
             conn.close()
+
+
 
 def clear_all_tables():
     conn = connect_db()
@@ -309,53 +265,29 @@ def clear_form():
     entry_category_id.clear()
 
 
-def edit_book():
-    row = table_books.currentRow()
-    if row == -1:
-        QMessageBox.warning(None, "Ошибка", "Пожалуйста, выберите книгу для редактирования.")
+def update_books_data():
+    """Fetch the data from the 'books' table and update the QTableWidget"""
+    conn = connect_db()
+    if conn is None:
+        QMessageBox.critical(None, "Error", "Failed to connect to database.")
         return
-    book_id = table_books.item(row, 0).text()
-    title = table_books.item(row, 1).text()
-    author = table_books.item(row, 2).text()
-    year = table_books.item(row, 3).text()
-    category_id = table_books.item(row, 4).text()
 
-    entry_title.setText(title)
-    entry_author.setText(author)
-    entry_year.setText(year)
-    entry_category_id.setText(category_id)
-    def save_edits():
-        new_title = entry_title.text()
-        new_author = entry_author.text()
-        new_year = entry_year.text()
-        new_category_id = entry_category_id.text()
+    try:
+        with conn.cursor() as cursor:
+            # Fetch data from the books table
+            cursor.execute("SELECT * FROM books;")
+            rows = cursor.fetchall()
 
-        if not new_title or not new_author or not new_year or not new_category_id:
-            QMessageBox.warning(None, "Ошибка", "Пожалуйста, заполните все поля.")
-            return
+            # Update the table in the GUI
+            table_books.setRowCount(len(rows))  # Set number of rows
+            for i, row in enumerate(rows):
+                for j, cell in enumerate(row):
+                    table_books.setItem(i, j, QTableWidgetItem(str(cell)))
+    except Exception as e:
+        QMessageBox.critical(None, "Error", f"Failed to fetch books data: {e}")
+    finally:
+        conn.close()
 
-        try:
-            new_year = int(new_year)
-        except ValueError:
-            QMessageBox.warning(None, "Ошибка", "Год издания должен быть числом.")
-            return
-        conn = connect_db()
-        if conn:
-            try:
-                cur = conn.cursor()
-                cur.execute("UPDATE books SET title=%s, author=%s, year=%s, category_id=%s WHERE id=%s",
-                            (new_title, new_author, new_year, new_category_id, book_id))
-                conn.commit()
-                QMessageBox.information(None, "Успех", "Книга успешно обновлена!")
-                load_books()
-            except Exception as e:
-                QMessageBox.critical(None, "Ошибка", f"Не удалось обновить книгу: {e}")
-            finally:
-                conn.close()
-
-    button_save_edits = QPushButton("Сохранить изменения")
-    button_save_edits.clicked.connect(save_edits)
-    add_book_layout.addWidget(button_save_edits)
 
 
 def delete_book():
@@ -470,10 +402,7 @@ table_search.setColumnCount(5)  # Количество столбцов: id, tit
 table_search.setHorizontalHeaderLabels(["ID", "Название", "Автор", "Год", "Категория"])
 search_layout.addWidget(table_search)
 
-# # Кнопка для удаления книги по названию
-# button_delete_by_title = QPushButton("Удалить книгу по названию")
-# button_delete_by_title.clicked.connect(delete_book_by_title)
-# search_layout.addWidget(button_delete_by_title)
+
 
 tab_search_books.setLayout(search_layout)
 
@@ -487,8 +416,8 @@ table_books.setColumnCount(5)  # Увеличиваем количество к�
 table_books.setHorizontalHeaderLabels(["ID", "Название", "Автор", "Год", "Категория"])
 books_layout.addWidget(table_books)
 
-button_edit_book = QPushButton("Редактировать книгу")
-button_edit_book.clicked.connect(edit_book)
+button_edit_book = QPushButton("Обновить")
+button_edit_book.clicked.connect(update_books_data)  # Подключаем функцию обновления данных
 books_layout.addWidget(button_edit_book)
 
 button_delete_book = QPushButton("Удалить книгу")
@@ -510,7 +439,9 @@ button_delete_db.clicked.connect(delete_database)
 database_layout.addWidget(button_delete_db)
 
 button_clear_books = QPushButton("Очистить таблицу книг")
-button_clear_books.clicked.connect(lambda: clear_table("books"))
+# button_clear_books.clicked.connect(lambda: clear_table("books"))
+button_clear_books.clicked.connect(clear_table)
+
 database_layout.addWidget(button_clear_books)
 
 button_clear_all = QPushButton("Очистить все таблицы")
@@ -533,8 +464,7 @@ button_add_category = QPushButton("Добавить категорию")
 button_add_category.clicked.connect(lambda: tabs.setCurrentIndex(5))  # Переход на вкладку добавления категории
 categories_layout.addWidget(button_add_category)
 
-button_edit_category = QPushButton("Редактировать категорию")
-categories_layout.addWidget(button_edit_category)
+
 
 button_delete_category = QPushButton("Удалить категорию")
 button_delete_category.clicked.connect(delete_category)
