@@ -111,39 +111,68 @@ $$;
 
 
 -- 3.Вывод содержимого таблиц
-CREATE OR REPLACE FUNCTION load_books()
-RETURNS TABLE(id INT, title TEXT, author TEXT, year INT, category_id INT)
-LANGUAGE plpgsql
-AS $$
+CREATE OR REPLACE FUNCTION get_all_books()
+RETURNS TABLE (
+    id INT,
+    title TEXT,
+    author TEXT,
+    year INT,
+    category_id INT
+) AS $$
 BEGIN
-    RETURN QUERY SELECT id, title, author, year, category_id FROM books;
+    RETURN QUERY
+    SELECT
+        Books.id,
+        Books.title::TEXT,
+        Books.author::TEXT,
+        Books.year,
+        Books.category_id
+    FROM Books;
 END;
-$$;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION get_all_categories()
+RETURNS TABLE (
+    id INT,
+    name TEXT
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT
+        categories.id,
+        categories.name::TEXT
+    FROM categories;
+END;
+$$ LANGUAGE plpgsql;
 
 
 
 
 -- 4. Очистка (частичная - одной, и полная - всех) таблиц
-CREATE OR REPLACE PROCEDURE clear_table(table_name TEXT)
+CREATE OR REPLACE PROCEDURE delete_books_table()
 LANGUAGE plpgsql
 AS $$
 BEGIN
-    EXECUTE format('TRUNCATE TABLE %I RESTART IDENTITY CASCADE', table_name);
-    RAISE NOTICE 'Table % has been cleared successfully.', table_name;
+    -- Очистка таблицы books (удаление всех данных)
+    TRUNCATE TABLE books RESTART IDENTITY CASCADE;
+
+    RAISE NOTICE 'All data in the table "books" have been deleted successfully.';
 END;
 $$;
+
+
 
 CREATE OR REPLACE PROCEDURE clear_all_tables()
 LANGUAGE plpgsql
 AS $$
 BEGIN
-    TRUNCATE TABLE books CASCADE;
+    TRUNCATE TABLE books RESTART IDENTITY CASCADE;
 
-    TRUNCATE TABLE readers CASCADE;
+    TRUNCATE TABLE readers RESTART IDENTITY CASCADE;
 
-    TRUNCATE TABLE reservations CASCADE;
+    TRUNCATE TABLE reservations RESTART IDENTITY CASCADE;
 
-    TRUNCATE TABLE categories CASCADE;
+    TRUNCATE TABLE categories RESTART IDENTITY CASCADE;
 
     RAISE NOTICE 'Specified tables have been cleared.';
 END;
@@ -214,9 +243,6 @@ $$;
 CREATE INDEX IF NOT EXISTS idx_books_title ON Books (title);
 
 
-
-
-
 -- 7. Обновление кортежа
 
 
@@ -226,6 +252,16 @@ CREATE INDEX IF NOT EXISTS idx_books_title ON Books (title);
 
 
 -- 8. Удаление по заранее выбранному текстовому не ключевому полю
+
+
+
+
+
+
+
+
+-- 9. Удаление конкретной записи, выбранной пользователем
+
 CREATE OR REPLACE PROCEDURE delete_book(
     p_book_id INTEGER
 )
@@ -235,9 +271,6 @@ BEGIN
     DELETE FROM Books WHERE id = p_book_id;
 END;
 $$;
--- 9. Удаление конкретной записи, выбранной пользователем
-
-
 
 
 
@@ -322,4 +355,5 @@ VALUES ('Краткая история времени', 'Стивен Хокин
 ON CONFLICT (title) DO NOTHING;
 
 
-
+DROP PROCEDURE IF EXISTS clear_table(TEXT);
+DROP PROCEDURE IF EXISTS clear_table(unknown);
